@@ -3,18 +3,25 @@ main.py — Streamlit frontend for the AI Chat Application.
 
 Layout
 ------
-Sidebar : New Chat button + scrollable thread list
-Main    : Chat message history + input box
+Sidebar : New Chat button + scrollable thread list + rename widget + memory inspector
+Main    : Chat message history + sticky input box
 """
+
+from __future__ import annotations  # enables list[dict] syntax on Python 3.9
+
+import os
 
 import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Config
+# Config — read from environment so the same image works in any environment
 # ---------------------------------------------------------------------------
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
 st.set_page_config(
     page_title="AI Chat",
@@ -28,10 +35,10 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 if "active_thread_id" not in st.session_state:
-    st.session_state.active_thread_id = None
+    st.session_state.active_thread_id: int | None = None
 
 if "active_thread_title" not in st.session_state:
-    st.session_state.active_thread_title = ""
+    st.session_state.active_thread_title: str = ""
 
 if "messages" not in st.session_state:
     st.session_state.messages: list[dict] = []
@@ -40,41 +47,58 @@ if "messages" not in st.session_state:
 # API helpers
 # ---------------------------------------------------------------------------
 
+_TIMEOUT_SHORT = 10   # seconds — for read-only / rename calls
+_TIMEOUT_CHAT  = 60   # seconds — LLM calls can be slow
+
 
 def api_get(path: str) -> list | dict | None:
     try:
-        r = requests.get(f"{API_BASE}{path}", timeout=30)
+        r = requests.get(f"{API_BASE}{path}", timeout=_TIMEOUT_SHORT)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
-        st.error("Cannot reach the backend. Is `uvicorn app:app --reload` running?")
+        st.error(
+            "⚠️ Cannot reach the backend. "
+            "Make sure `uvicorn app:app --reload` is running on port 8000."
+        )
         return None
     except requests.exceptions.HTTPError as exc:
-        st.error(f"API error: {exc}")
+        st.error(f"API error {exc.response.status_code}: {exc.response.text}")
         return None
 
 
 def api_post(path: str, payload: dict) -> dict | None:
     try:
-        r = requests.post(f"{API_BASE}{path}", json=payload, timeout=60)
+        r = requests.post(f"{API_BASE}{path}", json=payload, timeout=_TIMEOUT_CHAT)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
-        st.error("Cannot reach the backend. Is `uvicorn app:app --reload` running?")
+        st.error(
+            "⚠️ Cannot reach the backend. "
+            "Make sure `uvicorn app:app --reload` is running on port 8000."
+        )
         return None
     except requests.exceptions.HTTPError as exc:
-        st.error(f"API error {r.status_code}: {r.text}")
+        st.error(f"API error {exc.response.status_code}: {exc.response.text}")
         return None
 
 
 def api_put(path: str, payload: dict) -> dict | None:
     try:
-        r = requests.put(f"{API_BASE}{path}", json=payload, timeout=10)
+        r = requests.put(f"{API_BASE}{path}", json=payload, timeout=_TIMEOUT_SHORT)
         r.raise_for_status()
         return r.json()
-    except Exception as exc:
-        st.error(f"Rename failed: {exc}")
+    except requests.exceptions.ConnectionError:
+        st.error("⚠️ Cannot reach the backend.")
         return None
+    except requests.exceptions.HTTPError as exc:
+        st.error(f"Rename failed — {exc.response.status_code}: {exc.response.text}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Domain helpers
+# ---------------------------------------------------------------------------
 
 
 def fetch_threads() -> list[dict]:
@@ -96,7 +120,7 @@ def send_message(thread_id: int, message: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Actions
+# State actions
 # ---------------------------------------------------------------------------
 
 
@@ -121,15 +145,17 @@ def handle_send(user_input: str) -> None:
         st.warning("Please select or create a chat first.")
         return
 
-    # Optimistically append user message for instant UI feedback
+    # Optimistically show the user message before waiting for the LLM
     st.session_state.messages.append({"role": "user", "content": user_input})
 
     with st.spinner("Thinking…"):
         result = send_message(thread_id, user_input)
 
     if result:
-        st.session_state.messages.append({"role": "assistant", "content": result["reply"]})
-        # Refresh thread list so auto-titled threads update the sidebar
+        st.session_state.messages.append(
+            {"role": "assistant", "content": result["reply"]}
+        )
+        # Rerun so the sidebar reflects any auto-title change
         st.rerun()
 
 
@@ -157,7 +183,7 @@ with st.sidebar:
             if st.button(label, key=f"thread_{thread['id']}", use_container_width=True):
                 select_thread(thread["id"], thread["title"])
 
-    # Rename widget (only shown when a thread is selected)
+    # Rename widget — only visible when a thread is active
     if st.session_state.active_thread_id:
         st.divider()
         st.subheader("Rename Chat")
@@ -168,13 +194,16 @@ with st.sidebar:
             label_visibility="collapsed",
         )
         if st.button("Rename", use_container_width=True):
-            updated = api_put(f"/threads/{st.session_state.active_thread_id}", {"title": new_title})
+            updated = api_put(
+                f"/threads/{st.session_state.active_thread_id}",
+                {"title": new_title},
+            )
             if updated:
                 st.session_state.active_thread_title = updated["title"]
                 st.success("Renamed!")
                 st.rerun()
 
-    # Memory inspector (collapsed by default)
+    # Memory inspector
     with st.expander("🧠 Universal Memory"):
         memory = api_get("/memory")
         if memory:
@@ -188,7 +217,6 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 
 if not st.session_state.active_thread_id:
-    # Welcome / empty state
     st.markdown(
         """
         <div style="display:flex;flex-direction:column;align-items:center;
@@ -202,19 +230,15 @@ if not st.session_state.active_thread_id:
         unsafe_allow_html=True,
     )
 else:
-    # Thread header
     col_title, _ = st.columns([4, 1])
     with col_title:
         st.subheader(st.session_state.active_thread_title or "Chat")
 
-    # Message history
-    chat_container = st.container()
-    with chat_container:
+    with st.container():
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-    # Input box — st.chat_input is sticky at the bottom of the page
     user_input = st.chat_input("Type a message…")
     if user_input:
         handle_send(user_input)

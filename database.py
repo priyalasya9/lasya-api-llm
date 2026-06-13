@@ -23,7 +23,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./chats.db")
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},  # required for SQLite
+    # SQLite requires this flag when used with FastAPI's threaded request handling
+    connect_args={"check_same_thread": False},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -45,15 +46,19 @@ class ChatThread(Base):
     title = Column(String(255), nullable=False, default="New Chat")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
+    messages = relationship(
+        "Message", back_populates="thread", cascade="all, delete-orphan"
+    )
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    thread_id = Column(Integer, ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False)   # "user" | "assistant"
+    thread_id = Column(
+        Integer, ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False
+    )
+    role = Column(String(20), nullable=False)  # "user" | "assistant"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -74,11 +79,11 @@ class Memory(Base):
 
 
 def create_tables() -> None:
-    """Create all tables if they don't already exist."""
+    """Create all tables if they do not already exist."""
     Base.metadata.create_all(bind=engine)
 
 
-def get_db() -> Session:  # type: ignore[return]
+def get_db():  # type: ignore[return]
     """FastAPI dependency: yields a database session and closes it afterwards."""
     db = SessionLocal()
     try:

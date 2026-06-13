@@ -1,0 +1,52 @@
+# render.yaml — Render Blueprint
+# Deploys two services from this single repository:
+#   1. lasya-chat-backend  — FastAPI  (port 8000)
+#   2. lasya-chat-frontend — Streamlit (port 8501)
+#
+# How to deploy:
+#   1. Push this file to GitHub.
+#   2. Go to https://dashboard.render.com/blueprints
+#   3. Click "New Blueprint Instance" → connect this repository.
+#   4. Render will detect this file and create both services automatically.
+#   5. Set the secret environment variables listed below in the Render dashboard.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend — FastAPI
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: lasya-chat-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: OPENAI_API_KEY
+        sync: false          # marked secret — you set this in the Render dashboard
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+      - key: DATABASE_URL
+        value: sqlite:///./chats.db
+      # After the frontend is deployed, set this to your Render frontend URL.
+      # Example: https://lasya-chat-frontend.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false          # set in dashboard after both services are live
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Streamlit
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: lasya-chat-frontend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run main.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      # Set this to your backend's Render URL after the backend service is deployed.
+      # Example: https://lasya-chat-backend.onrender.com
+      - key: API_BASE
+        sync: false          # set in dashboard after backend is live

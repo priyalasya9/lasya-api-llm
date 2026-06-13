@@ -33,10 +33,12 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 _api_key = os.getenv("OPENAI_API_KEY", "")
-if not _api_key or _api_key == "your_key_here":
+_PLACEHOLDER_VALUES = {"your_key_here", "your_openai_api_key_here", ""}
+if _api_key in _PLACEHOLDER_VALUES:
     raise RuntimeError(
-        "OPENAI_API_KEY is not set. "
-        "Copy .env.example to .env and add your OpenAI API key."
+        "OPENAI_API_KEY is not configured. "
+        "Local: copy .env.example to .env and add your key. "
+        "Render: set OPENAI_API_KEY in the service's Environment tab."
     )
 
 # ---------------------------------------------------------------------------

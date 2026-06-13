@@ -1,22 +1,22 @@
 # AI Chat Application
 
-A production-quality mini AI chat application demonstrating a clean full-stack Python architecture.
+A production-quality mini AI chat app built with **Streamlit + FastAPI + SQLite + OpenAI**.
 
 | Layer | Technology |
 |---|---|
 | Frontend | Streamlit |
 | Backend | FastAPI |
-| Database | SQLite via SQLAlchemy ORM |
-| AI | OpenAI `gpt-4o-mini` (swappable) |
+| Database | SQLite (SQLAlchemy ORM) |
+| AI | OpenAI `gpt-4o-mini` |
 
 ---
 
 ## Features
 
 - **Multi-thread chat** — create, rename, and switch between independent conversations
-- **Full message history** — every message is persisted to SQLite and restored on revisit
-- **Universal memory** — facts shared in any thread (e.g. your name) are remembered across all future threads automatically
-- **Clean architecture** — Pydantic schemas, SQLAlchemy ORM, environment-based config, no hardcoded secrets
+- **Full message history** — every message persisted to SQLite and restored on revisit
+- **Universal memory** — facts shared in any thread are remembered across all future threads
+- **Production-ready** — environment-based config, startup validation, CORS controls, no hardcoded secrets
 
 ---
 
@@ -27,109 +27,13 @@ lasya-api-llm/
 ├── app.py           # FastAPI backend — routes, LLM calls, memory logic
 ├── database.py      # SQLAlchemy models and session factory
 ├── main.py          # Streamlit frontend
+├── render.yaml      # Render Blueprint — deploys both services automatically
+├── runtime.txt      # Pins Python 3.11 for all platforms
 ├── requirements.txt # Pinned Python dependencies
-├── .env.example     # Environment variable template (copy to .env)
+├── .env.example     # Environment variable template (copy → .env for local dev)
 ├── .gitignore       # Excludes .env, *.db, venv, __pycache__, etc.
 └── README.md
 ```
-
----
-
-## Prerequisites
-
-| Requirement | Minimum version | Check command |
-|---|---|---|
-| Python | 3.9+ (3.11 recommended) | `python --version` |
-| pip | any | `pip --version` |
-| Git | any | `git --version` |
-| OpenAI API key | — | platform.openai.com/api-keys |
-
----
-
-## Installation
-
-### 1 · Clone the repository
-
-```bash
-# Linux / macOS / Windows (Git Bash or PowerShell)
-git clone https://github.com/priyalasya9/lasya-api-llm.git
-cd lasya-api-llm
-git checkout claude/nifty-davinci-981uo7
-```
-
-### 2 · Create a virtual environment
-
-```bash
-# Linux / macOS
-python3 -m venv venv
-source venv/bin/activate
-
-# Windows PowerShell
-python -m venv venv
-venv\Scripts\Activate.ps1
-```
-
-> **Windows tip:** if `Activate.ps1` is blocked, run this once:
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
-
-### 3 · Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4 · Configure environment variables
-
-```bash
-# Linux / macOS
-cp .env.example .env
-
-# Windows PowerShell
-copy .env.example .env
-```
-
-Open `.env` and set your OpenAI key:
-
-```dotenv
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-See `.env.example` for all available options.
-
----
-
-## Running the Application
-
-You need **two terminals**, both with the virtual environment activated.
-
-### Terminal 1 — FastAPI backend
-
-```bash
-uvicorn app:app --reload
-```
-
-Expected output:
-```
-INFO:     Uvicorn running on http://127.0.0.1:8000
-INFO:     Application startup complete.
-```
-
-The SQLite database (`chats.db`) is created automatically on first startup. No migration step required.
-
-### Terminal 2 — Streamlit frontend
-
-```bash
-streamlit run main.py
-```
-
-Expected output:
-```
-  Local URL: http://localhost:8501
-```
-
-Your browser opens automatically. If it does not, navigate to `http://localhost:8501`.
 
 ---
 
@@ -140,135 +44,205 @@ Your browser opens automatically. If it does not, navigate to `http://localhost:
 | `OPENAI_API_KEY` | **Yes** | — | OpenAI secret key (`sk-proj-...`) |
 | `LLM_MODEL` | No | `gpt-4o-mini` | Any OpenAI chat model |
 | `DATABASE_URL` | No | `sqlite:///./chats.db` | SQLAlchemy connection string |
-| `ALLOWED_ORIGINS` | No | `http://localhost:8501,...` | Comma-separated CORS origins |
-| `API_BASE` | No | `http://localhost:8000` | Backend URL used by the frontend |
+| `ALLOWED_ORIGINS` | No | `http://localhost:8501,...` | Comma-separated CORS origins for the backend |
+| `API_BASE` | No | `http://localhost:8000` | Backend URL used by the Streamlit frontend |
+
+---
+
+## Deployment — Render (Recommended)
+
+Render deploys both services (backend + frontend) automatically from `render.yaml`.  
+No CLI required — everything is done through the Render dashboard.
+
+### Step 1 — Create a Render account
+
+Go to **https://render.com** → sign up (free tier is sufficient).
+
+### Step 2 — Connect your GitHub repository
+
+1. In the Render dashboard, click **"New"** → **"Blueprint"**
+2. Click **"Connect a repository"**
+3. Authorise Render to access your GitHub account
+4. Select **`priyalasya9/lasya-api-llm`**
+5. Select the branch **`claude/nifty-davinci-981uo7`**
+6. Render detects `render.yaml` and shows two services:
+   - `lasya-chat-backend` (FastAPI)
+   - `lasya-chat-frontend` (Streamlit)
+7. Click **"Apply"** — Render begins building both services
+
+### Step 3 — Set the secret environment variables
+
+Render will not deploy the backend until `OPENAI_API_KEY` is set.
+
+**For `lasya-chat-backend`:**
+
+1. Go to Dashboard → `lasya-chat-backend` → **Environment**
+2. Add:
+
+| Key | Value |
+|---|---|
+| `OPENAI_API_KEY` | `sk-proj-your-real-key-here` |
+| `ALLOWED_ORIGINS` | `https://lasya-chat-frontend.onrender.com` |
+
+**For `lasya-chat-frontend`:**
+
+1. Go to Dashboard → `lasya-chat-frontend` → **Environment**
+2. Add:
+
+| Key | Value |
+|---|---|
+| `API_BASE` | `https://lasya-chat-backend.onrender.com` |
+
+> **Note:** The exact URLs follow the pattern `https://<service-name>.onrender.com`.  
+> You can see the assigned URL on each service's dashboard page.
+
+### Step 4 — Trigger a redeploy
+
+After setting environment variables:
+
+1. Go to each service → click **"Manual Deploy"** → **"Deploy latest commit"**
+2. Wait for both builds to show **"Live"** (≈ 2–4 minutes each)
+
+### Step 5 — Access the live application
+
+| Service | URL |
+|---|---|
+| **Frontend (Streamlit)** | `https://lasya-chat-frontend.onrender.com` |
+| **Backend (FastAPI)** | `https://lasya-chat-backend.onrender.com` |
+| **API Docs (Swagger)** | `https://lasya-chat-backend.onrender.com/docs` |
+| **Health check** | `https://lasya-chat-backend.onrender.com/health` |
+
+> **Free tier note:** Render's free services spin down after 15 minutes of inactivity.  
+> The first request after a sleep takes ~30 seconds to wake up. This is normal.
+
+---
+
+## Important: SQLite on Render
+
+Render's free tier uses an **ephemeral filesystem** — the `chats.db` file is wiped on every deploy.  
+Chat history and memory are lost after each deployment.
+
+**This is acceptable for demos and interviews.**
+
+For persistent data, upgrade to a Render Postgres database and set:
+```
+DATABASE_URL=postgresql://user:password@host/dbname
+```
+
+---
+
+## Local Development
+
+### 1 · Clone the repository
+
+```bash
+git clone https://github.com/priyalasya9/lasya-api-llm.git
+cd lasya-api-llm
+git checkout claude/nifty-davinci-981uo7
+```
+
+### 2 · Create virtual environment
+
+```bash
+# Linux / macOS
+python3 -m venv venv && source venv/bin/activate
+
+# Windows PowerShell
+python -m venv venv
+venv\Scripts\Activate.ps1
+```
+
+> Windows tip — if blocked by execution policy, run once:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+
+### 3 · Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4 · Configure environment
+
+```bash
+# Linux / macOS
+cp .env.example .env
+
+# Windows
+copy .env.example .env
+```
+
+Edit `.env`:
+```dotenv
+OPENAI_API_KEY=sk-proj-your-real-key-here
+```
+
+### 5 · Run backend (Terminal 1)
+
+```bash
+uvicorn app:app --reload
+# → http://127.0.0.1:8000
+```
+
+### 6 · Run frontend (Terminal 2)
+
+```bash
+streamlit run main.py
+# → http://localhost:8501
+```
 
 ---
 
 ## API Reference
 
-Interactive Swagger docs: **http://localhost:8000/docs**
+Interactive docs at `http://localhost:8000/docs` (local) or `https://lasya-chat-backend.onrender.com/docs` (production).
 
-| Method | Path | Body | Description |
-|---|---|---|---|
-| `GET` | `/health` | — | Liveness probe |
-| `POST` | `/threads` | `{"title": "..."}` | Create a thread |
-| `GET` | `/threads` | — | List all threads |
-| `PUT` | `/threads/{id}` | `{"title": "..."}` | Rename a thread |
-| `GET` | `/threads/{id}/messages` | — | Get thread history |
-| `POST` | `/chat` | `{"thread_id": 1, "message": "..."}` | Chat with the AI |
-| `GET` | `/memory` | — | View all stored user facts |
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `POST` | `/threads` | Create a chat thread |
+| `GET` | `/threads` | List all threads |
+| `PUT` | `/threads/{id}` | Rename a thread |
+| `GET` | `/threads/{id}/messages` | Full message history |
+| `POST` | `/chat` | Send message → AI reply |
+| `GET` | `/memory` | View stored user facts |
 
-### Quick test with curl
+---
 
+## Testing the API
+
+**curl:**
 ```bash
-# Health check
-curl http://localhost:8000/health
-
-# Create a thread
-curl -X POST http://localhost:8000/threads
-
-# Send a message
-curl -X POST http://localhost:8000/chat \
+curl https://lasya-chat-backend.onrender.com/health
+curl -X POST https://lasya-chat-backend.onrender.com/threads
+curl -X POST https://lasya-chat-backend.onrender.com/chat \
   -H "Content-Type: application/json" \
   -d '{"thread_id": 1, "message": "My name is Shivani"}'
-
-# Prove universal memory in a new thread
-curl -X POST http://localhost:8000/threads
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"thread_id": 2, "message": "What is my name?"}'
-# → "Your name is Shivani."
 ```
 
-### Quick test with Windows PowerShell
-
+**Windows PowerShell:**
 ```powershell
-# Health check
-Invoke-RestMethod -Uri http://localhost:8000/health
-
-# Create a thread
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/threads `
+Invoke-RestMethod -Uri https://lasya-chat-backend.onrender.com/health
+Invoke-RestMethod -Method Post -Uri https://lasya-chat-backend.onrender.com/threads `
   -ContentType "application/json" -Body '{}'
-
-# Send a message
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/chat `
+Invoke-RestMethod -Method Post -Uri https://lasya-chat-backend.onrender.com/chat `
   -ContentType "application/json" `
   -Body '{"thread_id": 1, "message": "My name is Shivani"}'
-
-# Prove universal memory
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/threads `
-  -ContentType "application/json" -Body '{}'
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/chat `
-  -ContentType "application/json" `
-  -Body '{"thread_id": 2, "message": "What is my name?"}'
 ```
 
 ---
 
-## How Universal Memory Works
+## Pre-Launch Checklist
 
 ```
-User sends message
-      │
-      ▼
- Save to DB (messages table)
-      │
-      ├──► [background] LLM extracts facts → saved to memory table
-      │
-      ▼
- Load full thread history
-      │
-      ▼
- Load all memory facts
-      │
-      ▼
- Build system prompt:
-   "You are a helpful assistant.
-    Known user facts:
-    - User's name is Shivani
-    - User is learning SQL"
-      │
-      ▼
- Call OpenAI → stream reply → save → return to frontend
-```
-
-Memory extraction is best-effort: if it fails, the main chat response is never blocked.
-
----
-
-## Extending to Other LLM Providers
-
-The LLM call is isolated in `app.py`. To swap providers:
-
-**Groq** (OpenAI-compatible API):
-```python
-from openai import OpenAI
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
-```
-
-**Google Gemini**: install `google-generativeai` and wrap the `generate_content` call behind the same `build_openai_messages` helper.
-
-Set `LLM_MODEL` in `.env` to switch models without touching any code.
-
----
-
-## Deployment Checklist
-
-```
-[ ] .env file created from .env.example
-[ ] OPENAI_API_KEY set to a valid key with billing enabled
-[ ] .env is listed in .gitignore (it is — do not remove it)
-[ ] chats.db is listed in .gitignore (it is — regenerated on startup)
-[ ] Virtual environment activated in both terminals
-[ ] pip install -r requirements.txt completed with no errors
-[ ] uvicorn running on port 8000 (Terminal 1)
-[ ] streamlit running on port 8501 (Terminal 2)
-[ ] http://localhost:8000/health returns {"status": "ok"}
-[ ] http://localhost:8501 opens the chat UI
+[ ] OPENAI_API_KEY set (Render dashboard or local .env)
+[ ] ALLOWED_ORIGINS set to frontend Render URL (backend service)
+[ ] API_BASE set to backend Render URL (frontend service)
+[ ] Both services show "Live" in Render dashboard
+[ ] /health endpoint returns {"status": "ok"}
+[ ] Swagger UI loads at /docs
+[ ] Chat UI loads and accepts messages
 ```
 
 ---
@@ -277,9 +251,9 @@ Set `LLM_MODEL` in `.env` to switch models without touching any code.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `RuntimeError: OPENAI_API_KEY is not set` | Missing `.env` or wrong key value | Copy `.env.example` → `.env`, paste your key |
-| `Cannot reach the backend` in the UI | `uvicorn` not running | Start Terminal 1 with `uvicorn app:app --reload` |
-| `openai.AuthenticationError` | Invalid API key | Verify key at platform.openai.com/api-keys |
-| `openai.RateLimitError` | No billing on OpenAI account | Add payment at platform.openai.com/billing |
-| `Activate.ps1 cannot be loaded` | Windows execution policy | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| Port 8000 in use | Another process | `uvicorn app:app --reload --port 8001` + set `API_BASE=http://localhost:8001` in `.env` |
+| `RuntimeError: OPENAI_API_KEY is not configured` | Key not set | Add to Render Environment tab or local `.env` |
+| Backend returns 502 on `/chat` | Invalid key or no billing | Verify key at platform.openai.com/api-keys |
+| Frontend shows "Cannot reach the backend" | `API_BASE` not set | Set `API_BASE` to backend Render URL in frontend env vars |
+| First request is very slow | Free tier cold start | Normal — wait 30s for service to wake up |
+| Chat history disappears after deploy | SQLite ephemeral filesystem | Expected on free tier; use Postgres for persistence |
+| `Activate.ps1` blocked on Windows | Execution policy | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
